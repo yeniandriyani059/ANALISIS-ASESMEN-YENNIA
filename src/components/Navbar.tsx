@@ -12,6 +12,7 @@ import {
   Users,
   Settings,
   GraduationCap,
+  LogOut,
 } from 'lucide-react';
 import { Assessment } from '../types';
 
@@ -137,6 +138,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="Pengaturan Kop Sekolah & Tanda Tangan"
             >
               <Settings className="w-4 h-4" />
+            </button>
+
+            <div className="w-px h-6 bg-slate-200 mx-0.5 hidden sm:block"></div>
+
+            {/* Tombol Logout */}
+            <button
+              onClick={async () => {
+                const { supabase } = await import('../lib/supabase');
+                await supabase.auth.signOut();
+              }}
+              className="p-2 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200/80 transition-colors cursor-pointer flex items-center gap-1.5"
+              title="Keluar / Logout"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline-block text-xs font-bold">Logout</span>
             </button>
           </div>
         </div>

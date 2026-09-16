@@ -18,6 +18,8 @@ import { StudentsManageModal } from './components/StudentsManageModal';
 import { SchoolProfileModal } from './components/SchoolProfileModal';
 import { AssessmentSettingsKeyView } from './components/AssessmentSettingsKeyView';
 import { Loader2 } from 'lucide-react';
+import { AuthView } from './components/AuthView';
+import { PendingView } from './components/PendingView';
 
 import {
   Assessment,
@@ -38,8 +40,10 @@ import {
 } from './utils/storage';
 import { exportAssessmentToExcel } from './utils/excelExport';
 import { api } from './lib/api';
+import { supabase } from './lib/supabase';
+import { Session } from '@supabase/supabase-js';
 
-export default function App() {
+function MainApp({ session }: { session: Session }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -492,4 +496,59 @@ export default function App() {
       )}
     </div>
   );
+}
+
+export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  const checkProfileStatus = async (userId: string) => {
+    setIsAuthLoading(true);
+    try {
+      const { data, error } = await supabase.from('profiles').select('status').eq('user_id', userId).maybeSingle();
+      if (data) {
+        setProfileStatus(data.status);
+      } else {
+        // If profile not found, maybe they just registered, default to pending or wait for trigger
+        setProfileStatus('pending');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setIsAuthLoading(false);
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) checkProfileStatus(session.user.id);
+      else setIsAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) checkProfileStatus(session.user.id);
+      else {
+        setProfileStatus(null);
+        setIsAuthLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+        <p className="text-slate-500 font-medium">Memuat sesi...</p>
+      </div>
+    );
+  }
+
+  if (!session) return <AuthView />;
+  if (profileStatus === 'pending') return <PendingView />;
+  
+  return <MainApp session={session} />;
 }
