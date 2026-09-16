@@ -88,8 +88,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Main KPI Stats Row */}
-      {activeAssessment && activeStats && (
+      {assessments.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+            <FileSpreadsheet className="w-10 h-10 text-blue-400" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Belum ada data asesmen</h2>
+          <p className="text-slate-500 max-w-md mx-auto mb-6">
+            Anda belum memiliki data asesmen. Silakan klik tombol "Buat Analisis Asesmen Baru" di atas untuk memulai.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Main KPI Stats Row */}
+          {activeAssessment && activeStats && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">
@@ -308,6 +320,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

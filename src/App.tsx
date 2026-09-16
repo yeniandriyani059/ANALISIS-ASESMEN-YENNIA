@@ -28,16 +28,7 @@ import {
   StudentAssessmentResult,
   OptionChoice,
 } from './types';
-import {
-  loadAssessments,
-  loadActiveAssessmentId,
-  saveActiveAssessmentId,
-  loadSchoolProfile,
-  loadStudents,
-  generateDefaultAssessment,
-  DEFAULT_PROFILE,
-  DEFAULT_STUDENTS,
-} from './utils/storage';
+import { EMPTY_PROFILE } from './utils/storage';
 import { exportAssessmentToExcel } from './utils/excelExport';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
@@ -48,7 +39,7 @@ function MainApp({ session }: { session: Session }) {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(DEFAULT_PROFILE);
+  const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(EMPTY_PROFILE);
   const [students, setStudents] = useState<Student[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
@@ -69,42 +60,14 @@ function MainApp({ session }: { session: Session }) {
           api.getAssessments(),
         ]);
         
-        let initialProfile = prof;
-        if (!initialProfile) {
-          const localProf = loadSchoolProfile();
-          initialProfile = localProf || DEFAULT_PROFILE;
-          await api.saveProfile(initialProfile);
-        }
-        setSchoolProfile(initialProfile);
-
-        let initialStudents = stds;
-        if (!initialStudents || initialStudents.length === 0) {
-          const localStds = loadStudents();
-          initialStudents = (localStds && localStds.length > 0) ? localStds : DEFAULT_STUDENTS;
-          await api.saveStudents(initialStudents);
-        }
-        setStudents(initialStudents);
-
-        let initialAssessments = asms;
-        if (!initialAssessments || initialAssessments.length === 0) {
-          const localAsms = loadAssessments();
-          if (localAsms && localAsms.length > 0) {
-            initialAssessments = localAsms;
-            for (const a of initialAssessments) {
-              await api.saveAssessment(a);
-            }
-          } else {
-            initialAssessments = [generateDefaultAssessment()];
-            await api.saveAssessment(initialAssessments[0]);
-          }
-        }
-        setAssessments(initialAssessments);
+        setSchoolProfile(prof || EMPTY_PROFILE);
+        setStudents(stds || []);
+        setAssessments(asms || []);
         
-        const savedActiveId = loadActiveAssessmentId();
-        if (savedActiveId && initialAssessments.some(a => a.id === savedActiveId)) {
-          setActiveId(savedActiveId);
-        } else if (initialAssessments.length > 0) {
-          setActiveId(initialAssessments[0].id);
+        if (asms && asms.length > 0) {
+          setActiveId(asms[0].id);
+        } else {
+          setActiveId(null);
         }
       } catch (err) {
         console.error('Error loading data from Supabase:', err);
@@ -117,13 +80,6 @@ function MainApp({ session }: { session: Session }) {
 
   // Active Assessment
   const activeAssessment = assessments.find((a) => a.id === activeId) || assessments[0] || null;
-
-  // Persist active ID on change
-  useEffect(() => {
-    if (activeId) {
-      saveActiveAssessmentId(activeId);
-    }
-  }, [activeId]);
 
   // Select Assessment
   const handleSelectAssessment = (id: string) => {
@@ -170,15 +126,16 @@ function MainApp({ session }: { session: Session }) {
 
   // Delete assessment
   const handleDeleteAssessment = async (id: string) => {
-    let updated = assessments.filter((a) => a.id !== id);
-    if (updated.length === 0) {
-      const fresh = generateDefaultAssessment();
-      updated = [fresh];
-      await api.saveAssessment(fresh);
-    }
+    const updated = assessments.filter((a) => a.id !== id);
     setAssessments(updated);
-    if (activeId === id || !updated.some((a) => a.id === activeId)) {
-      setActiveId(updated[0].id);
+    
+    if (activeId === id) {
+      if (updated.length > 0) {
+        setActiveId(updated[0].id);
+      } else {
+        setActiveId(null);
+        setActiveTab('dashboard');
+      }
     }
     
     await api.deleteAssessment(id);
