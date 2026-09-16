@@ -387,6 +387,7 @@ function MainApp({ session }: { session: Session }) {
         {activeTab === 'report' && activeAssessment && (
           <ReportPrintView
             assessment={activeAssessment}
+            students={students}
             onBack={() => setActiveTab('sheet')}
           />
         )}
@@ -523,14 +524,26 @@ export default function App() {
       else setIsAuthLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        // Only show loader if it's a new sign in, otherwise just silently check or skip
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (_event === 'TOKEN_REFRESHED') {
+        return; // Do nothing, avoid re-rendering whole App on window focus
+      }
+      
+      // If we already have a session and event is SIGNED_IN, it might be a spurious event from window focus.
+      setSession((prevSession) => {
+        if (prevSession && _event === 'SIGNED_IN') return prevSession;
+        return newSession;
+      });
+
+      if (newSession) {
         if (_event === 'SIGNED_IN') {
-          checkProfileStatus(session.user.id, true);
-        } else if (_event === 'TOKEN_REFRESHED') {
-          // Do nothing, session is already updated, no need to refetch profile and unmount MainApp
+          // Check if it's the same user to avoid redundant fetches
+          setSession((prev) => {
+             if (!prev || prev.user.id !== newSession.user.id) {
+                 checkProfileStatus(newSession.user.id, true);
+             }
+             return prev; // We already updated it above
+          });
         }
       }
       else {

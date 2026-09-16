@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
-import { Assessment } from '../types';
+import { Assessment, Student } from '../types';
 import {
   evaluateStudentResult,
   analyzePgItems,
@@ -24,10 +24,11 @@ import { exportAssessmentToExcel } from '../utils/excelExport';
 
 interface ReportPrintViewProps {
   assessment: Assessment;
+  students?: Student[];
   onBack: () => void;
 }
 
-export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, onBack }) => {
+export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, students = [], onBack }) => {
   const [reportType, setReportType] = useState<'all' | 'scores' | 'items' | 'remedial'>('all');
   const [pageOrientation, setPageOrientation] = useState<'auto' | 'landscape' | 'portrait'>('auto');
   const [pageSize, setPageSize] = useState<'A4' | 'Folio'>('A4');
@@ -496,7 +497,7 @@ export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, on
                         {idx + 1}
                       </td>
                       <td className="py-1 px-2 border-r border-slate-300 text-center text-slate-600 font-mono text-[10px]">
-                        {s.studentNis || '-'}
+                        {students.find(std => std.id === s.studentId)?.nis || s.studentNis || '-'}
                       </td>
                       <td className="py-1 px-2 border-r border-slate-300 font-medium">
                         {s.studentName}

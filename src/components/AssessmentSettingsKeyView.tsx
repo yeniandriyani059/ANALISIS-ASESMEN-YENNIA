@@ -60,12 +60,30 @@ export const AssessmentSettingsKeyView: React.FC<AssessmentSettingsKeyViewProps>
   const [showPasteBox, setShowPasteBox] = useState<boolean>(false);
   const [savedToast, setSavedToast] = useState<boolean>(false);
   const [uniformScoreInput, setUniformScoreInput] = useState<number>(3);
+  const [isDraftLoaded, setIsDraftLoaded] = useState<boolean>(false);
 
   // References to square input elements for seamless auto-advance
   const keyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Update local state if active assessment changes
   useEffect(() => {
+    try {
+      const draft = localStorage.getItem(`draft_settings_${assessment.id}`);
+      if (draft && !isDraftLoaded) {
+        const parsed = JSON.parse(draft);
+        setPgCount(parsed.pgCount ?? assessment.pgCount ?? 0);
+        setPgWeight(parsed.pgWeight ?? assessment.pgWeight ?? 1);
+        setEssayCount(parsed.essayCount ?? assessment.essayCount ?? 0);
+        setHasOptionE(parsed.hasOptionE ?? assessment.hasOptionE ?? false);
+        setAnswerKeys(parsed.answerKeys ?? assessment.answerKeys ?? []);
+        setEssayMaxScores(parsed.essayMaxScores ?? assessment.essayMaxScores ?? []);
+        setIsDraftLoaded(true);
+        return;
+      }
+    } catch(e) {}
+
+    if (isDraftLoaded) return;
+
     setPgCount(assessment.pgCount || 0);
     setPgWeight(assessment.pgWeight || 1);
     setEssayCount(assessment.essayCount || 0);
@@ -82,7 +100,15 @@ export const AssessmentSettingsKeyView: React.FC<AssessmentSettingsKeyViewProps>
       scores.push(3);
     }
     setEssayMaxScores(scores.slice(0, assessment.essayCount || 0));
-  }, [assessment.id]);
+  }, [assessment.id, isDraftLoaded]);
+
+  // Save to draft on change
+  useEffect(() => {
+    if (!isDraftLoaded) return;
+    localStorage.setItem(`draft_settings_${assessment.id}`, JSON.stringify({
+      pgCount, pgWeight, essayCount, hasOptionE, answerKeys, essayMaxScores
+    }));
+  }, [pgCount, pgWeight, essayCount, hasOptionE, answerKeys, essayMaxScores, assessment.id, isDraftLoaded]);
 
   // Handler: Change PG Count (Real-time synchronization)
   const handlePgCountChange = (newCount: number) => {
@@ -205,6 +231,7 @@ export const AssessmentSettingsKeyView: React.FC<AssessmentSettingsKeyViewProps>
 
   // Save Configuration to Assessment
   const handleSaveConfig = () => {
+    localStorage.removeItem(`draft_settings_${assessment.id}`);
     onUpdateAssessmentConfig({
       pgCount,
       pgWeight: Number(pgWeight) || 1,

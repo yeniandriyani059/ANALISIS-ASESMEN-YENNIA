@@ -72,8 +72,37 @@ export const AssessmentFormModal: React.FC<AssessmentFormModalProps> = ({
   );
 
   const [includeExistingStudents, setIncludeExistingStudents] = useState(true);
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
 
   useEffect(() => {
+    if (isOpen && !isEdit) {
+      try {
+        const draft = localStorage.getItem('draft_assessment_form');
+        if (draft && !isDraftLoaded) {
+          const parsed = JSON.parse(draft);
+          setTitle(parsed.title ?? '');
+          setSubject(parsed.subject ?? 'Bahasa Indonesia');
+          setCustomSubject(parsed.customSubject ?? '');
+          setClassName(parsed.className ?? 'Kelas II');
+          setPhase(parsed.phase ?? 'Fase A');
+          setSemester(parsed.semester ?? 'Ganjil');
+          setSchoolYear(parsed.schoolYear ?? '2024/2025');
+          setAssessmentType(parsed.assessmentType ?? 'Sumatif Lingkup Materi');
+          setDate(parsed.date ?? new Date().toISOString().split('T')[0]);
+          setPassingGrade(parsed.passingGrade ?? 75);
+          setPgCount(parsed.pgCount ?? 20);
+          setPgWeight(parsed.pgWeight ?? 1);
+          setHasOptionE(parsed.hasOptionE ?? false);
+          setEssayCount(parsed.essayCount ?? 5);
+          setLearningObjectives(parsed.learningObjectives ?? '');
+          setIsDraftLoaded(true);
+          return;
+        }
+      } catch (e) {}
+    }
+
+    if (isDraftLoaded && !isEdit) return;
+
     if (initialData) {
       setTitle(initialData.title);
       setSubject(COMMON_SUBJECTS.includes(initialData.subject) ? initialData.subject : 'Lainnya');
@@ -89,7 +118,7 @@ export const AssessmentFormModal: React.FC<AssessmentFormModalProps> = ({
       setPassingGrade(initialData.passingGrade);
       setPgCount(initialData.pgCount);
       setPgWeight(initialData.pgWeight);
-      setHasOptionE(initialData.hasOptionE);
+      setHasOptionE(initialData.hasOptionE || false);
       setEssayCount(initialData.essayCount);
       setLearningObjectives(initialData.learningObjectives || '');
       
@@ -99,7 +128,16 @@ export const AssessmentFormModal: React.FC<AssessmentFormModalProps> = ({
       }
       setEssayMaxScores(scores.slice(0, initialData.essayCount));
     }
-  }, [initialData]);
+  }, [initialData, isOpen, isDraftLoaded, isEdit]);
+
+  useEffect(() => {
+    if (isOpen && !isEdit && isDraftLoaded) {
+      localStorage.setItem('draft_assessment_form', JSON.stringify({
+        title, subject, customSubject, className, phase, semester, schoolYear,
+        assessmentType, date, passingGrade, pgCount, pgWeight, hasOptionE, essayCount, learningObjectives
+      }));
+    }
+  }, [title, subject, customSubject, className, phase, semester, schoolYear, assessmentType, date, passingGrade, pgCount, pgWeight, hasOptionE, essayCount, learningObjectives, isOpen, isEdit, isDraftLoaded]);
 
   const handleEssayCountChange = (count: number) => {
     const clamped = Math.max(0, Math.min(50, isNaN(count) ? 0 : count));
@@ -120,6 +158,7 @@ export const AssessmentFormModal: React.FC<AssessmentFormModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.removeItem('draft_assessment_form');
 
     const finalSubject = subject === 'Lainnya' ? (customSubject.trim() || 'Mata Pelajaran') : subject;
     const finalTitle = title.trim() || `${assessmentType} ${finalSubject}`;
