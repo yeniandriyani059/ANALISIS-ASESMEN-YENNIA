@@ -1,0 +1,6 @@
+{
+  "name": "ANALISIS ASESMEN by Bu Guru Yennia",
+  "description": "Aplikasi lengkap analisis hasil asesmen pembelajaran, analisis butir soal, daya beda, rekapitulasi nilai, serta rencana tindak lanjut remedial dan pengayaan by Bu Guru Yennia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
