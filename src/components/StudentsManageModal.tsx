@@ -30,9 +30,29 @@ export const StudentsManageModal: React.FC<StudentsManageModalProps> = ({
   // Sync list when opened or students prop changes
   useEffect(() => {
     if (isOpen) {
+      try {
+        const draft = localStorage.getItem('draft_students_list');
+        if (draft) {
+          const parsed = JSON.parse(draft) as Student[];
+          // Only use draft if it has different length or we want to preserve un-saved state
+          if (parsed.length > 0) {
+            setList(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
       setList([...students]);
     }
   }, [students, isOpen]);
+
+  // Save to draft whenever list changes
+  useEffect(() => {
+    if (isOpen) {
+      localStorage.setItem('draft_students_list', JSON.stringify(list));
+    }
+  }, [list, isOpen]);
 
   const handleAddSingle = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,6 +168,7 @@ export const StudentsManageModal: React.FC<StudentsManageModalProps> = ({
   };
 
   const handleSaveAll = () => {
+    localStorage.removeItem('draft_students_list');
     onSaveStudents(list);
     if (onSyncToActiveAssessment) {
       onSyncToActiveAssessment(list);

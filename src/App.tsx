@@ -17,7 +17,7 @@ import { AnswerKeyModal } from './components/AnswerKeyModal';
 import { StudentsManageModal } from './components/StudentsManageModal';
 import { SchoolProfileModal } from './components/SchoolProfileModal';
 import { AssessmentSettingsKeyView } from './components/AssessmentSettingsKeyView';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileSpreadsheet } from 'lucide-react';
 import { AuthView } from './components/AuthView';
 import { PendingView } from './components/PendingView';
 
@@ -42,6 +42,7 @@ function MainApp({ session }: { session: Session }) {
   const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(EMPTY_PROFILE);
   const [students, setStudents] = useState<Student[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [logoError, setLogoError] = useState(false);
 
   // Modals state
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -247,12 +248,14 @@ function MainApp({ session }: { session: Session }) {
         updatedResults.push({
           ...existing,
           studentName: std.name,
+          studentNis: std.nis,
           gender: std.gender,
         });
       } else {
         updatedResults.push({
           studentId: std.id,
           studentName: std.name,
+          studentNis: std.nis,
           gender: std.gender,
           attendance: 'Hadir',
           pgAnswers: Array.from({ length: activeAssessment.pgCount }, () => '' as OptionChoice),
@@ -406,7 +409,44 @@ function MainApp({ session }: { session: Session }) {
             }}
           />
         )}
+
+        {!activeAssessment && !['dashboard', 'archive'].includes(activeTab) && (
+          <div className="bg-white rounded-2xl p-12 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center max-w-2xl mx-auto mt-10">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+              <FileSpreadsheet className="w-10 h-10 text-blue-400" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Belum Ada Asesmen Aktif</h2>
+            <p className="text-slate-500 max-w-md mx-auto mb-6">
+              Menu ini membutuhkan data asesmen yang aktif. Silakan buat atau pilih asesmen terlebih dahulu dari menu Dashboard atau Arsip Penilaian.
+            </p>
+            <button
+              onClick={() => {
+                setActiveTab('dashboard');
+              }}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 transition-all"
+            >
+              Kembali ke Dashboard
+            </button>
+          </div>
+        )}
       </main>
+
+      {/* Footer Branding */}
+      <footer className="print:hidden w-full py-6 mt-auto flex flex-col items-center justify-center gap-2 border-t border-slate-200 bg-white">
+        <span className="text-xs font-medium text-slate-400 uppercase tracking-widest">
+          Powered by
+        </span>
+        {!logoError ? (
+          <img 
+            src="/LOGO BUGURUYENNIA.png" 
+            alt="Bu Guru Yennia Logo" 
+            className="h-10 object-contain opacity-90 hover:opacity-100 transition-opacity"
+            onError={() => setLogoError(true)}
+          />
+        ) : (
+          <span className="text-sm font-extrabold text-blue-600 tracking-tight">Bu Guru Yennia</span>
+        )}
+      </footer>
 
       {/* Modals */}
       {isNewModalOpen && (
@@ -460,8 +500,8 @@ export default function App() {
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  const checkProfileStatus = async (userId: string) => {
-    setIsAuthLoading(true);
+  const checkProfileStatus = async (userId: string, showLoader: boolean = true) => {
+    if (showLoader) setIsAuthLoading(true);
     try {
       const { data, error } = await supabase.from('profiles').select('status').eq('user_id', userId).maybeSingle();
       if (data) {
@@ -473,19 +513,26 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    setIsAuthLoading(false);
+    if (showLoader) setIsAuthLoading(false);
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) checkProfileStatus(session.user.id);
+      if (session) checkProfileStatus(session.user.id, true);
       else setIsAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) checkProfileStatus(session.user.id);
+      if (session) {
+        // Only show loader if it's a new sign in, otherwise just silently check or skip
+        if (_event === 'SIGNED_IN') {
+          checkProfileStatus(session.user.id, true);
+        } else if (_event === 'TOKEN_REFRESHED') {
+          // Do nothing, session is already updated, no need to refetch profile and unmount MainApp
+        }
+      }
       else {
         setProfileStatus(null);
         setIsAuthLoading(false);

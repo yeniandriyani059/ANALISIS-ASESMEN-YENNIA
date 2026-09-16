@@ -144,6 +144,7 @@ export const AssessmentFormModal: React.FC<AssessmentFormModalProps> = ({
       results = availableStudents.map((std) => ({
         studentId: std.id,
         studentName: std.name,
+        studentNis: std.nis,
         gender: std.gender,
         attendance: 'Hadir' as const,
         pgAnswers: Array.from({ length: pgCount }, () => '' as OptionChoice),

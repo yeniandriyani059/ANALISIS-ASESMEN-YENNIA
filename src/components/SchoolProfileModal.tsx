@@ -24,6 +24,21 @@ export const SchoolProfileModal: React.FC<SchoolProfileModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      try {
+        const draft = localStorage.getItem('draft_school_profile');
+        if (draft) {
+          const parsed = JSON.parse(draft);
+          setSchoolName(parsed.schoolName ?? profile.schoolName ?? '');
+          setTeacherName(parsed.teacherName ?? profile.teacherName ?? '');
+          setTeacherNip(parsed.teacherNip ?? profile.teacherNip ?? '');
+          setPrincipalName(parsed.principalName ?? profile.principalName ?? '');
+          setPrincipalNip(parsed.principalNip ?? profile.principalNip ?? '');
+          setCityName(parsed.cityName ?? profile.cityName ?? 'Slemped');
+          return;
+        }
+      } catch (e) {
+        // Ignore parse error
+      }
       setSchoolName(profile.schoolName || '');
       setTeacherName(profile.teacherName || '');
       setTeacherNip(profile.teacherNip || '');
@@ -33,8 +48,17 @@ export const SchoolProfileModal: React.FC<SchoolProfileModalProps> = ({
     }
   }, [profile, isOpen]);
 
+  useEffect(() => {
+    if (isOpen) {
+      localStorage.setItem('draft_school_profile', JSON.stringify({
+        schoolName, teacherName, teacherNip, principalName, principalNip, cityName
+      }));
+    }
+  }, [schoolName, teacherName, teacherNip, principalName, principalNip, cityName, isOpen]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.removeItem('draft_school_profile');
     onSave({
       schoolName: schoolName.trim() || 'SD Negeri 06 Slemped',
       teacherName: teacherName.trim() || 'Guru Kelas',
