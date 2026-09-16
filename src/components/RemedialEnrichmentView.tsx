@@ -12,6 +12,9 @@ import {
 import { Assessment, StudentAssessmentResult } from '../types';
 import { evaluateStudentResult } from '../utils/assessmentCalculations';
 
+import { useStudentsContext } from '../contexts/StudentContext';
+import { useEffect } from 'react';
+
 interface RemedialEnrichmentViewProps {
   assessment: Assessment;
   onUpdateResults: (results: StudentAssessmentResult[]) => void;
@@ -23,7 +26,27 @@ export const RemedialEnrichmentView: React.FC<RemedialEnrichmentViewProps> = ({
   onUpdateResults,
   onPrintRequest,
 }) => {
-  const evaluated = assessment.results.map((r) => evaluateStudentResult(r, assessment));
+  const { students, isLoading, refreshStudents } = useStudentsContext();
+
+  useEffect(() => {
+    refreshStudents();
+  }, [refreshStudents]);
+
+  // Enrich assessment results with real names from context before computing stats
+  const enrichedAssessment = {
+    ...assessment,
+    results: assessment.results.map((r) => {
+      const student = students.find(s => s.id === r.studentId);
+      return {
+        ...r,
+        studentName: student?.name || r.studentName || '-',
+        studentNis: student?.nis || r.studentNis || '-',
+        gender: student?.gender || r.gender || 'L'
+      };
+    })
+  };
+
+  const evaluated = enrichedAssessment.results.map((r) => evaluateStudentResult(r, enrichedAssessment));
 
   const remedialList = evaluated.filter((r) => r.attendance === 'Hadir' && !r.isPassed);
   const enrichmentList = evaluated.filter((r) => r.attendance === 'Hadir' && r.isPassed);
@@ -43,6 +66,15 @@ export const RemedialEnrichmentView: React.FC<RemedialEnrichmentViewProps> = ({
     });
     onUpdateResults(nextResults);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[50vh]">
+        <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mb-4"></div>
+        <p className="font-medium text-slate-500">Memuat data remedial siswa...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

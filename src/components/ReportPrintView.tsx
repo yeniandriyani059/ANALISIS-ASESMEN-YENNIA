@@ -21,14 +21,21 @@ import {
   computeOverallStats,
 } from '../utils/assessmentCalculations';
 import { exportAssessmentToExcel } from '../utils/excelExport';
+import { useStudentsContext } from '../contexts/StudentContext';
 
 interface ReportPrintViewProps {
   assessment: Assessment;
-  students?: Student[];
+  students?: Student[]; // Kept for backwards compatibility but not needed
   onBack: () => void;
 }
 
-export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, students = [], onBack }) => {
+export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, onBack }) => {
+  const { students, isLoading, refreshStudents } = useStudentsContext();
+
+  useEffect(() => {
+    refreshStudents();
+  }, [refreshStudents]);
+
   const [reportType, setReportType] = useState<'all' | 'scores' | 'items' | 'remedial'>('all');
   const [pageOrientation, setPageOrientation] = useState<'auto' | 'landscape' | 'portrait'>('auto');
   const [pageSize, setPageSize] = useState<'A4' | 'Folio'>('A4');
@@ -41,10 +48,24 @@ export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, st
   const pdfButtonRef = useRef<HTMLButtonElement>(null);
   const isPrintingLockRef = useRef(false);
 
-  const evaluated = assessment.results.map((r) => evaluateStudentResult(r, assessment));
-  const stats = computeOverallStats(assessment);
-  const pgItems = analyzePgItems(assessment);
-  const essayItems = analyzeEssayItems(assessment);
+  // Enrich assessment results with real names from context before computing stats
+  const enrichedAssessment = {
+    ...assessment,
+    results: assessment.results.map((r) => {
+      const student = students.find(s => s.id === r.studentId);
+      return {
+        ...r,
+        studentName: student?.name || r.studentName || '-',
+        studentNis: student?.nis || r.studentNis || '-',
+        gender: student?.gender || r.gender || 'L'
+      };
+    })
+  };
+
+  const evaluated = enrichedAssessment.results.map((r) => evaluateStudentResult(r, enrichedAssessment));
+  const stats = computeOverallStats(enrichedAssessment);
+  const pgItems = analyzePgItems(enrichedAssessment);
+  const essayItems = analyzeEssayItems(enrichedAssessment);
 
   const remedialList = evaluated.filter((r) => r.attendance === 'Hadir' && !r.isPassed);
   const enrichmentList = evaluated.filter((r) => r.attendance === 'Hadir' && r.isPassed);
@@ -261,6 +282,15 @@ export const ReportPrintView: React.FC<ReportPrintViewProps> = ({ assessment, st
     month: 'long',
     year: 'numeric',
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[50vh]">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+        <p className="font-medium text-slate-500">Memuat laporan dan data siswa...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

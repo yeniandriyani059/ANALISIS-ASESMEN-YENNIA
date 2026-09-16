@@ -16,6 +16,7 @@ import {
 import { Assessment, StudentAssessmentResult, OptionChoice, Attendance } from '../types';
 import { evaluateStudentResult, calculateMaxScores } from '../utils/assessmentCalculations';
 import { AssessmentWorkflowHeader } from './AssessmentWorkflowHeader';
+import { useStudentsContext } from '../contexts/StudentContext';
 
 interface SheetInputViewProps {
   assessment: Assessment;
@@ -39,10 +40,25 @@ export const SheetInputView: React.FC<SheetInputViewProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<StudentAssessmentResult | null>(null);
 
+  const { students, isLoading, refreshStudents } = useStudentsContext();
+
+  useEffect(() => {
+    refreshStudents();
+  }, [refreshStudents]);
+
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // Evaluate results
-  const evaluatedResults = assessment.results.map((r) => evaluateStudentResult(r, assessment));
+  const evaluatedResults = assessment.results.map((r) => {
+    const student = students.find((s) => s.id === r.studentId);
+    const enrichedResult = {
+      ...r,
+      studentName: student?.name || r.studentName || '-',
+      studentNis: student?.nis || r.studentNis || '-',
+      gender: student?.gender || r.gender || 'L'
+    };
+    return evaluateStudentResult(enrichedResult, assessment);
+  });
   const { totalMax, pgMax, essayMax } = calculateMaxScores(assessment);
 
   // Filtered results
@@ -390,7 +406,16 @@ export const SheetInputView: React.FC<SheetInputViewProps> = ({
 
             {/* Body */}
             <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
-              {filtered.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={assessment.pgCount + assessment.essayCount + 7} className="py-12 text-center text-slate-500 font-medium">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                      Memuat data siswa...
+                    </div>
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td
                     colSpan={assessment.pgCount + assessment.essayCount + 7}

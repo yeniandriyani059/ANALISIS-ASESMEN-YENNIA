@@ -10,14 +10,36 @@ import {
 } from 'lucide-react';
 import { Assessment } from '../types';
 import { computeOverallStats, evaluateStudentResult } from '../utils/assessmentCalculations';
+import { useStudentsContext } from '../contexts/StudentContext';
+import { useEffect } from 'react';
 
 interface RecapStatsViewProps {
   assessment: Assessment;
 }
 
 export const RecapStatsView: React.FC<RecapStatsViewProps> = ({ assessment }) => {
-  const stats = computeOverallStats(assessment);
-  const evaluatedResults = assessment.results.map((r) => evaluateStudentResult(r, assessment));
+  const { students, isLoading, refreshStudents } = useStudentsContext();
+
+  useEffect(() => {
+    refreshStudents();
+  }, [refreshStudents]);
+
+  // Enrich assessment results with real names from context before computing stats
+  const enrichedAssessment = {
+    ...assessment,
+    results: assessment.results.map((r) => {
+      const student = students.find(s => s.id === r.studentId);
+      return {
+        ...r,
+        studentName: student?.name || r.studentName || '-',
+        studentNis: student?.nis || r.studentNis || '-',
+        gender: student?.gender || r.gender || 'L'
+      };
+    })
+  };
+
+  const stats = computeOverallStats(enrichedAssessment);
+  const evaluatedResults = enrichedAssessment.results.map((r) => evaluateStudentResult(r, enrichedAssessment));
 
   // Sort by final score descending for rank list
   const ranked = [...evaluatedResults]
@@ -25,6 +47,15 @@ export const RecapStatsView: React.FC<RecapStatsViewProps> = ({ assessment }) =>
     .sort((a, b) => (b.finalScore ?? 0) - (a.finalScore ?? 0));
 
   const isClassMastered = stats.passPercentage >= 85;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+        <p className="font-medium text-slate-500">Memuat data siswa...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

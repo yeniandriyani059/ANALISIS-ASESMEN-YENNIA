@@ -33,6 +33,8 @@ import { exportAssessmentToExcel } from './utils/excelExport';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
+import { StudentProvider, useStudentsContext } from './contexts/StudentContext';
+
 
 function MainApp({ session }: { session: Session }) {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -40,7 +42,7 @@ function MainApp({ session }: { session: Session }) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(EMPTY_PROFILE);
-  const [students, setStudents] = useState<Student[]>([]);
+  const { students, setStudents } = useStudentsContext();
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [logoError, setLogoError] = useState(false);
 
@@ -55,14 +57,12 @@ function MainApp({ session }: { session: Session }) {
     async function loadData() {
       setIsInitializing(true);
       try {
-        const [prof, stds, asms] = await Promise.all([
+        const [prof, asms] = await Promise.all([
           api.getProfile(),
-          api.getStudents(),
           api.getAssessments(),
         ]);
         
         setSchoolProfile(prof || EMPTY_PROFILE);
-        setStudents(stds || []);
         setAssessments(asms || []);
         
         if (asms && asms.length > 0) {
@@ -567,5 +567,9 @@ export default function App() {
   if (!session) return <AuthView />;
   if (profileStatus === 'pending') return <PendingView />;
   
-  return <MainApp session={session} />;
+  return (
+    <StudentProvider>
+      <MainApp session={session} />
+    </StudentProvider>
+  );
 }

@@ -11,13 +11,30 @@ import {
 } from 'lucide-react';
 import { Assessment } from '../types';
 import { analyzePgItems, analyzeEssayItems } from '../utils/assessmentCalculations';
+import { useStudentsContext } from '../contexts/StudentContext';
+import { useEffect } from 'react';
 
 interface ItemAnalysisViewProps {
   assessment: Assessment;
 }
 
 export const ItemAnalysisView: React.FC<ItemAnalysisViewProps> = ({ assessment }) => {
+  const { isLoading, refreshStudents } = useStudentsContext();
+
+  useEffect(() => {
+    refreshStudents();
+  }, [refreshStudents]);
+
   const [activeSubTab, setActiveSubTab] = useState<'pg' | 'essay'>('pg');
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[50vh]">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+        <p className="font-medium text-slate-500">Memuat analisis butir soal...</p>
+      </div>
+    );
+  }
 
   const pgItems = analyzePgItems(assessment);
   const essayItems = analyzeEssayItems(assessment);
