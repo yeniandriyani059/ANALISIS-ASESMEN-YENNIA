@@ -17,6 +17,7 @@ import { AnswerKeyModal } from './components/AnswerKeyModal';
 import { StudentsManageModal } from './components/StudentsManageModal';
 import { SchoolProfileModal } from './components/SchoolProfileModal';
 import { AssessmentSettingsKeyView } from './components/AssessmentSettingsKeyView';
+import { Loader2 } from 'lucide-react';
 
 import {
   Assessment,
@@ -27,28 +28,24 @@ import {
 } from './types';
 import {
   loadAssessments,
-  saveAssessments,
   loadActiveAssessmentId,
   saveActiveAssessmentId,
   loadSchoolProfile,
-  saveSchoolProfile,
   loadStudents,
-  saveStudents,
   generateDefaultAssessment,
+  DEFAULT_PROFILE,
+  DEFAULT_STUDENTS,
 } from './utils/storage';
 import { exportAssessmentToExcel } from './utils/excelExport';
+import { api } from './lib/api';
 
 export default function App() {
-  const [assessments, setAssessments] = useState<Assessment[]>(() => loadAssessments());
-  const [activeId, setActiveId] = useState<string | null>(() => {
-    const saved = loadActiveAssessmentId();
-    const initial = loadAssessments();
-    if (saved && initial.some((a) => a.id === saved)) return saved;
-    return initial.length > 0 ? initial[0].id : null;
-  });
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(() => loadSchoolProfile());
-  const [students, setStudents] = useState<Student[]>(() => loadStudents());
+  const [schoolProfile, setSchoolProfile] = useState<SchoolProfile>(DEFAULT_PROFILE);
+  const [students, setStudents] = useState<Student[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
   // Modals state
@@ -58,13 +55,64 @@ export default function App() {
   const [isStudentsModalOpen, setIsStudentsModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
+  useEffect(() => {
+    async function loadData() {
+      setIsInitializing(true);
+      try {
+        const [prof, stds, asms] = await Promise.all([
+          api.getProfile(),
+          api.getStudents(),
+          api.getAssessments(),
+        ]);
+        
+        let initialProfile = prof;
+        if (!initialProfile) {
+          const localProf = loadSchoolProfile();
+          initialProfile = localProf || DEFAULT_PROFILE;
+          await api.saveProfile(initialProfile);
+        }
+        setSchoolProfile(initialProfile);
+
+        let initialStudents = stds;
+        if (!initialStudents || initialStudents.length === 0) {
+          const localStds = loadStudents();
+          initialStudents = (localStds && localStds.length > 0) ? localStds : DEFAULT_STUDENTS;
+          await api.saveStudents(initialStudents);
+        }
+        setStudents(initialStudents);
+
+        let initialAssessments = asms;
+        if (!initialAssessments || initialAssessments.length === 0) {
+          const localAsms = loadAssessments();
+          if (localAsms && localAsms.length > 0) {
+            initialAssessments = localAsms;
+            for (const a of initialAssessments) {
+              await api.saveAssessment(a);
+            }
+          } else {
+            initialAssessments = [generateDefaultAssessment()];
+            await api.saveAssessment(initialAssessments[0]);
+          }
+        }
+        setAssessments(initialAssessments);
+        
+        const savedActiveId = loadActiveAssessmentId();
+        if (savedActiveId && initialAssessments.some(a => a.id === savedActiveId)) {
+          setActiveId(savedActiveId);
+        } else if (initialAssessments.length > 0) {
+          setActiveId(initialAssessments[0].id);
+        }
+      } catch (err) {
+        console.error('Error loading data from Supabase:', err);
+      } finally {
+        setIsInitializing(false);
+      }
+    }
+    loadData();
+  }, []);
+
   // Active Assessment
   const activeAssessment = assessments.find((a) => a.id === activeId) || assessments[0] || null;
-
-  // Persist assessments on change
-  useEffect(() => {
-    saveAssessments(assessments);
-  }, [assessments]);
 
   // Persist active ID on change
   useEffect(() => {
@@ -79,7 +127,7 @@ export default function App() {
   };
 
   // Save new or edited assessment
-  const handleSaveAssessment = (assessment: Assessment) => {
+  const handleSaveAssessment = async (assessment: Assessment) => {
     const exists = assessments.some((a) => a.id === assessment.id);
     let updated: Assessment[];
 
@@ -93,10 +141,13 @@ export default function App() {
     setActiveId(assessment.id);
     setEditingAssessment(null);
     setActiveTab('sheet');
+    
+    // Save to Supabase
+    await api.saveAssessment(assessment);
   };
 
   // Duplicate assessment
-  const handleDuplicateAssessment = (source: Assessment) => {
+  const handleDuplicateAssessment = async (source: Assessment) => {
     const duplicated: Assessment = {
       ...source,
       id: `asm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -109,23 +160,28 @@ export default function App() {
     setAssessments(updated);
     setActiveId(duplicated.id);
     setActiveTab('sheet');
+    
+    await api.saveAssessment(duplicated);
   };
 
   // Delete assessment
-  const handleDeleteAssessment = (id: string) => {
+  const handleDeleteAssessment = async (id: string) => {
     let updated = assessments.filter((a) => a.id !== id);
     if (updated.length === 0) {
       const fresh = generateDefaultAssessment();
       updated = [fresh];
+      await api.saveAssessment(fresh);
     }
     setAssessments(updated);
     if (activeId === id || !updated.some((a) => a.id === activeId)) {
       setActiveId(updated[0].id);
     }
+    
+    await api.deleteAssessment(id);
   };
 
   // Update student results inside active assessment
-  const handleUpdateResults = (newResults: StudentAssessmentResult[]) => {
+  const handleUpdateResults = async (newResults: StudentAssessmentResult[]) => {
     if (!activeAssessment) return;
 
     const updatedAssessment: Assessment = {
@@ -138,10 +194,12 @@ export default function App() {
       a.id === updatedAssessment.id ? updatedAssessment : a
     );
     setAssessments(nextList);
+    
+    await api.saveAssessment(updatedAssessment);
   };
 
   // Save answer keys
-  const handleSaveKeys = (keys: OptionChoice[], hasOptionE: boolean) => {
+  const handleSaveKeys = async (keys: OptionChoice[], hasOptionE: boolean) => {
     if (!activeAssessment) return;
 
     const updatedAssessment: Assessment = {
@@ -155,10 +213,12 @@ export default function App() {
       a.id === updatedAssessment.id ? updatedAssessment : a
     );
     setAssessments(nextList);
+    
+    await api.saveAssessment(updatedAssessment);
   };
 
-  // Full configuration update: PG count, PG weight, Keys, Essay count, Individual essay max scores
-  const handleUpdateAssessmentConfig = (updated: {
+  // Full configuration update
+  const handleUpdateAssessmentConfig = async (updated: {
     pgCount: number;
     pgWeight: number;
     hasOptionE: boolean;
@@ -168,7 +228,6 @@ export default function App() {
   }) => {
     if (!activeAssessment) return;
 
-    // Adjust each student's results in real time so arrays match new pgCount and essayCount
     const updatedResults = (activeAssessment.results || []).map((r) => {
       const nextPg = [...(r.pgAnswers || [])];
       while (nextPg.length < updated.pgCount) nextPg.push('');
@@ -204,16 +263,18 @@ export default function App() {
       a.id === updatedAssessment.id ? updatedAssessment : a
     );
     setAssessments(nextList);
+    
+    await api.saveAssessment(updatedAssessment);
   };
 
   // Save Master Students
-  const handleSaveStudents = (newList: Student[]) => {
+  const handleSaveStudents = async (newList: Student[]) => {
     setStudents(newList);
-    saveStudents(newList);
+    await api.saveStudents(newList);
   };
 
   // Synchronize master students to current assessment sheet
-  const handleSyncStudentsToActive = (studentList: Student[]) => {
+  const handleSyncStudentsToActive = async (studentList: Student[]) => {
     if (!activeAssessment) return;
 
     const currentResults = [...(activeAssessment.results || [])];
@@ -239,13 +300,13 @@ export default function App() {
       }
     });
 
-    handleUpdateResults(updatedResults);
+    await handleUpdateResults(updatedResults);
   };
 
   // Save School Profile
-  const handleSaveProfile = (newProfile: SchoolProfile) => {
+  const handleSaveProfile = async (newProfile: SchoolProfile) => {
     setSchoolProfile(newProfile);
-    saveSchoolProfile(newProfile);
+    await api.saveProfile(newProfile);
 
     // Also update signatures on active assessment
     if (activeAssessment) {
@@ -259,6 +320,7 @@ export default function App() {
         cityName: newProfile.cityName,
       };
       setAssessments(assessments.map((a) => (a.id === updatedAssessment.id ? updatedAssessment : a)));
+      await api.saveAssessment(updatedAssessment);
     }
   };
 
@@ -267,6 +329,16 @@ export default function App() {
     if (!activeAssessment) return;
     exportAssessmentToExcel(activeAssessment);
   };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+        <h2 className="text-slate-800 font-bold text-lg">Memuat Data Supabase...</h2>
+        <p className="text-slate-500 text-sm mt-1">Menyinkronkan data profil dan asesmen</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-blue-600 selection:text-white">
